@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CS460 - XTK Kinetic Cube Art Visualization</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        background: radial-gradient(ellipse at center, #0a0d1e 0%, #030308 100%);
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        color: #f0f4fa;
+        user-select: none;
+      }
+
+      /* Fullscreen Canvas Container */
+      canvas {
+        display: block;
+        width: 100vw !important;
+        height: 100vh !important;
+      }
+
+      /* Glassmorphism Control HUD */
+      #hud {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        background: rgba(12, 17, 34, 0.78);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        padding: 20px 22px;
+        width: 325px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.2) inset;
+        transition: opacity 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 240, 255, 0.3) transparent;
+      }
+
+      #hud::-webkit-scrollbar {
+        width: 4px;
+      }
+      #hud::-webkit-scrollbar-thumb {
+        background: rgba(0, 240, 255, 0.3);
+        border-radius: 4px;
+      }
+
+      #hud.hidden {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-12px) scale(0.97);
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+
+      h1 {
+        font-size: 1.18rem;
+        margin: 0;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, #00f0ff 0%, #ff007f 65%, #ffb703 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .badge {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: rgba(0, 240, 255, 0.12);
+        color: #00f0ff;
+        border: 1px solid rgba(0, 240, 255, 0.3);
+      }
+
+      .subtitle {
+        font-size: 0.72rem;
+        color: #8fa0be;
+        margin-bottom: 14px;
+        letter-spacing: 0.02em;
+      }
+
+      .section-label {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #6d82a6;
+        margin-top: 12px;
+        margin-bottom: 6px;
+        letter-spacing: 0.08em;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .btn-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+
+      button {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        color: #d2deed;
+        padding: 7px 9px;
+        font-size: 0.74rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+        font-weight: 500;
+        outline: none;
+        text-align: center;
+      }
+
+      button:hover {
+        background: rgba(0, 240, 255, 0.18);
+        border-color: rgba(0, 240, 255, 0.45);
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 240, 255, 0.2);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button.active {
+        background: linear-gradient(135deg, rgba(0, 200, 255, 0.4), rgba(255, 0, 128, 0.4));
+        border-color: #00f0ff;
+        color: #ffffff;
+        font-weight: 600;
+        box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+      }
+
+      .btn-action {
+        background: rgba(0, 240, 255, 0.1);
+        border-color: rgba(0, 240, 255, 0.25);
+        color: #a4f3ff;
+      }
+      .btn-action:hover {
+        background: rgba(0, 240, 255, 0.28);
+        border-color: #00f0ff;
+        color: #ffffff;
+      }
+
+      .btn-burst {
+        background: linear-gradient(135deg, rgba(255, 0, 128, 0.25), rgba(255, 183, 3, 0.25));
+        border-color: rgba(255, 0, 128, 0.4);
+        color: #ffd1e4;
+      }
+      .btn-burst:hover {
+        background: linear-gradient(135deg, rgba(255, 0, 128, 0.5), rgba(255, 183, 3, 0.5));
+        border-color: #ff007f;
+        box-shadow: 0 0 16px rgba(255, 0, 128, 0.4);
+        color: #ffffff;
+      }
+
+      .control-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 7px;
+        font-size: 0.74rem;
+        color: #9cb1ce;
+      }
+
+      .control-row span.val {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.72rem;
+        color: #00f0ff;
+        min-width: 38px;
+        text-align: right;
+      }
+
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 140px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.16);
+        border-radius: 2px;
+        outline: none;
+        transition: background 0.2s;
+      }
+
+      input[type="range"]:hover {
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #00f0ff;
+        box-shadow: 0 0 8px #00f0ff;
+        cursor: pointer;
+        transition: transform 0.15s, background 0.15s;
+      }
+
+      input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.25);
+        background: #ffffff;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        font-size: 0.75rem;
+        color: #b7c8df;
+        cursor: pointer;
+      }
+
+      .checkbox-row input[type="checkbox"] {
+        accent-color: #00f0ff;
+        cursor: pointer;
+        width: 14px;
+        height: 14px;
+      }
+
+      .keyboard-tips {
+        font-size: 0.67rem;
+        color: #6d82a6;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        margin-top: 12px;
+        padding-top: 10px;
+        line-height: 1.6;
+      }
+
+      kbd {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.65rem;
+        color: #cde1f7;
+      }
+
+      /* Bottom Telemetry HUD */
+      #telemetry {
+        position: absolute;
+        bottom: 18px;
+        right: 20px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.72rem;
+        color: rgba(220, 235, 255, 0.65);
+        background: rgba(12, 17, 34, 0.7);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 7px 12px;
+        border-radius: 8px;
+        pointer-events: none;
+        display: flex;
+        gap: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      .telemetry-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .telemetry-item .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #00f0ff;
+        box-shadow: 0 0 6px #00f0ff;
+      }
+
+      /* Floating Mini Button to Unhide HUD */
+      #hud-toggle-btn {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 999;
+        display: none;
+        padding: 8px 14px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        background: rgba(12, 17, 34, 0.85);
+        border: 1px solid rgba(0, 240, 255, 0.4);
+        color: #00f0ff;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+      }
+      #hud-toggle-btn:hover {
+        background: rgba(0, 240, 255, 0.2);
+        color: #ffffff;
+      }
+
+      /* Shockwave Ripple Canvas Overlay */
+      #shockwave-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 50;
+      }
+
+      /* Hidden file input for scene uploading */
+      #file-loader {
+        display: none;
+      }
+    </style>
+
+    <!-- Official XTK Framework -->
+    <script type="text/javascript" src="https://get.goXTK.com/xtk_edge.js"></script>
+    <!-- CS460 Standard Loader Compatibility Script -->
+    <script type="text/javascript" src="loader.js"></script>
+
+    <script type="text/javascript">
+      window.onload = function () {
+        // ==========================================
+        // 1. CONFIGURATION & STATE
+        // ==========================================
+        var CONFIG = {
+          gridSize: 9,              // 9x9 = 81 matrix sculpture cubes
+          cubeSpacing: 16.5,        // Spacing between matrix cubes
+          cubeSize: 9.5,            // Size of each matrix cube
+          numFlyingCubes: 24,       // Flying satellite cubes
+          orbitRadius: 95.0,        // Radius of orbital paths
+          speed: 1.0,               // Master animation speed multiplier
+          amplitude: 28.0,          // Vertical oscillation amplitude
+          frequency: 0.08,          // Spatial ripple frequency
+          autoRotate: true,         // Automatic smooth camera rotation
+          spinCubes: true,          // Axial rotation of individual cubes
+          colorWave: true,          // Continuous flowing color hues
+          mode: 'wave',             // 'wave', 'vortex', 'helix', 'pulse', 'torus', 'supernova'
+          theme: 'cyberpunk',       // 'cyberpunk', 'rainbow', 'aurora', 'fire', 'matrix', 'sunset'
+          paused: false
+        };
+
+        var state = {
+          time: 0,
+          shockwaveIntensity: 0,
+          shockwaveAge: 0,
+          shockwaveOrigin: [0, 0],
+          isDragging: false,
+          mouseDownPos: { x: 0, y: 0 },
+          lastFpsUpdate: performance.now(),
+          frameCount: 0,
+          fps: 60
+        };
+
+        // ==========================================
+        // 2. INITIALIZE XTK 3D RENDERER
+        // ==========================================
+        var r = new X.renderer3D();
+        r.init();
+        r.camera.position = [0, 0, 260];
+        r.camera.focus = [0, 0, 0];
+
+        // Ensure global access for loader.js
+        window.r = r;
+
+        // ==========================================
+        // 3. COLOR PALETTES & HSL COLOR CONVERTER
+        // ==========================================
+        function hslToRgb(h, s, l) {
+          h = ((h % 360) + 360) % 360;
+          var c = (1 - Math.abs(2 * l - 1)) * s;
+          var x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+          var m = l - c / 2;
+          var r1 = 0, g1 = 0, b1 = 0;
+          if (h < 60) { r1 = c; g1 = x; }
+          else if (h < 120) { r1 = x; g1 = c; }
+          else if (h < 180) { g1 = c; b1 = x; }
+          else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+          else if (h < 300) { r1 = x; b1 = c; }
+          else { r1 = c; b1 = x; }
+          return [
+            Math.min(1.0, Math.max(0.0, r1 + m)),
+            Math.min(1.0, Math.max(0.0, g1 + m)),
+            Math.min(1.0, Math.max(0.0, b1 + m))
+          ];
+        }
+
+        function getThemeColor(theme, factor, timeOffset) {
+          factor = (factor + timeOffset) % 1.0;
+          if (factor < 0) factor += 1.0;
+
+          switch (theme) {
+            case 'cyberpunk':
+              // Electric Cyan (185) -> Vivid Magenta (320) -> Purple (275)
+              return hslToRgb(180 + factor * 145, 0.95, 0.54);
+            case 'rainbow':
+              // Full 360 degree chromatic spectrum
+              return hslToRgb(factor * 360, 0.92, 0.52);
+            case 'aurora':
+              // Polar Emerald (135) -> Cyan (190) -> Royal Blue (235)
+              return hslToRgb(130 + factor * 110, 0.92, 0.52);
+            case 'fire':
+              // Crimson red (355) -> Amber (35) -> Gold (55)
+              return hslToRgb((factor * 60 + 355) % 360, 1.0, 0.52);
+            case 'matrix':
+              // Deep Cyber Phosphor Green -> Bright Emerald
+              return hslToRgb(105 + factor * 45, 0.95, 0.48);
+            case 'sunset':
+              // Peach Coral (15) -> Hot Pink (330) -> Violet (280)
+              return hslToRgb((330 + factor * 70) % 360, 0.92, 0.55);
+            default:
+              return [0.0, 0.9, 1.0];
+          }
+        }
+
+        // ==========================================
+        // 4. HELPER: MATRIX TRANSFORMATION
+        // ==========================================
+        // Updates an XTK cube's transform matrix directly with hardware-accelerated WebGL math
+        function updateCubeTransform(cube, tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+          var m = X.matrix.identity();
+          X.matrix.translate(m, tx, ty, tz);
+          if (rx) X.matrix.rotateX(m, rx);
+          if (ry) X.matrix.rotateY(m, ry);
+          if (rz) X.matrix.rotateZ(m, rz);
+          if (sx !== undefined && (sx !== 1.0 || sy !== 1.0 || sz !== 1.0)) {
+            X.matrix.scale(m, sx, sy, sz);
+          }
+          cube.transform.matrix = m;
+        }
+
+        // ==========================================
+        // 5. CONSTRUCT SCULPTURE MATRIX CUBES
+        // ==========================================
+        var matrixCubes = [];
+        var halfGrid = (CONFIG.gridSize - 1) / 2;
+
+        for (var i = 0; i < CONFIG.gridSize; i++) {
+          for (var j = 0; j < CONFIG.gridSize; j++) {
+            var cube = new X.cube();
+            var baseX = (i - halfGrid) * CONFIG.cubeSpacing;
+            var baseY = (j - halfGrid) * CONFIG.cubeSpacing;
+
+            // Geometry is built centered at [0, 0, 0] so local rotations & scales work accurately
+            cube.center = [0, 0, 0];
+            cube.lengthX = CONFIG.cubeSize;
+            cube.lengthY = CONFIG.cubeSize;
+            cube.lengthZ = CONFIG.cubeSize;
+            cube.color = [0.0, 0.9, 1.0];
+
+            cube.customData = {
+              gridI: i,
+              gridJ: j,
+              index: i * CONFIG.gridSize + j,
+              baseX: baseX,
+              baseY: baseY,
+              dist: Math.sqrt(baseX * baseX + baseY * baseY),
+              angle: Math.atan2(baseY, baseX),
+              rotSpeedX: (Math.random() - 0.5) * 2.8,
+              rotSpeedY: (Math.random() - 0.5) * 2.8,
+              rotSpeedZ: (Math.random() - 0.5) * 2.8,
+              rotX: Math.random() * Math.PI * 2,
+              rotY: Math.random() * Math.PI * 2,
+              rotZ: Math.random() * Math.PI * 2,
+              // Random explosion velocity vector for supernova mode
+              burstDir: [
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2
+              ]
+            };
+
+            // Normalize burst direction
+            var bLen = Math.hypot(cube.customData.burstDir[0], cube.customData.burstDir[1], cube.customData.burstDir[2]) || 1;
+            cube.customData.burstDir[0] /= bLen;
+            cube.customData.burstDir[1] /= bLen;
+            cube.customData.burstDir[2] /= bLen;
+
+            r.add(cube);
+            matrixCubes.push(cube);
+          }
+        }
+
+        // ==========================================
+        // 6. CONSTRUCT FLYING / ORBITING SATELLITES
+        // ==========================================
+        var flyingCubes = [];
+        for (var f = 0; f < CONFIG.numFlyingCubes; f++) {
+          var fc = new X.cube();
+          var sz = 5.0 + Math.random() * 5.5;
+
+          fc.center = [0, 0, 0];
+          fc.lengthX = sz;
+          fc.lengthY = sz;
+          fc.lengthZ = sz;
+          fc.color = [1.0, 0.2, 0.6];
+
+          fc.customData = {
+            id: f,
+            radius: CONFIG.orbitRadius + (Math.random() - 0.5) * 35.0,
+            orbitSpeed: (0.45 + Math.random() * 0.8) * (f % 2 === 0 ? 1 : -1),
+            orbitPhase: (f / CONFIG.numFlyingCubes) * Math.PI * 2 + Math.random() * 0.5,
+            orbitTiltX: (Math.random() - 0.5) * Math.PI * 0.85,
+            orbitTiltZ: (Math.random() - 0.5) * Math.PI * 0.85,
+            verticalFreq: 1 + Math.floor(Math.random() * 3),
+            verticalAmp: 25.0 + Math.random() * 30.0,
+            rotSpeedX: (Math.random() - 0.5) * 5.0,
+            rotSpeedY: (Math.random() - 0.5) * 5.0,
+            rotSpeedZ: (Math.random() - 0.5) * 5.0,
+            rotX: Math.random() * Math.PI * 2,
+            rotY: Math.random() * Math.PI * 2,
+            rotZ: Math.random() * Math.PI * 2
+          };
+
+          r.add(fc);
+          flyingCubes.push(fc);
+        }
+
+        // ==========================================
+        // 7. CENTRAL NUCLEUS / PULSING POWER CORE
+        // ==========================================
+        var coreCube = new X.cube();
+        coreCube.center = [0, 0, 0];
+        coreCube.lengthX = 14;
+        coreCube.lengthY = 14;
+        coreCube.lengthZ = 14;
+        coreCube.color = [1.0, 1.0, 1.0];
+        r.add(coreCube);
+
+        // ==========================================
+        // 8. ANIMATION & RENDER LOOP (r.onRender)
+        // ==========================================
+        r.onRender = function () {
+          // FPS Calculation
+          state.frameCount++;
+          var now = performance.now();
+          if (now - state.lastFpsUpdate >= 500) {
+            state.fps = Math.round((state.frameCount * 1000) / (now - state.lastFpsUpdate));
+            document.getElementById('stats-fps').textContent = state.fps;
+            state.frameCount = 0;
+            state.lastFpsUpdate = now;
+          }
+
+          if (CONFIG.paused) return;
+
+          // Increment time
+          state.time += 0.035 * CONFIG.speed;
+          var t = state.time;
+
+          // Decay shockwave
+          if (state.shockwaveIntensity > 0.005) {
+            state.shockwaveIntensity *= 0.94;
+            state.shockwaveAge += 0.06 * CONFIG.speed;
+          } else {
+            state.shockwaveIntensity = 0;
+            state.shockwaveAge = 0;
+          }
+
+          // A) ANIMATE MATRIX SCULPTURE CUBES
+          var maxDist = halfGrid * CONFIG.cubeSpacing * 1.414;
+          var numCubes = matrixCubes.length;
+
+          for (var k = 0; k < numCubes; k++) {
+            var c = matrixCubes[k];
+            var cd = c.customData;
+
+            var x = cd.baseX;
+            var y = cd.baseY;
+            var z = 0;
+            var rx = 0, ry = 0, rz = 0;
+            var scale = 1.0;
+
+            // 1. WAVE RIPPLE MODE
+            if (CONFIG.mode === 'wave') {
+              var ripple = Math.sin(t * 2.6 - cd.dist * CONFIG.frequency) * CONFIG.amplitude;
+              var rippleCross = Math.cos(t * 1.8 + cd.baseX * 0.06) * (CONFIG.amplitude * 0.35);
+              z = ripple + rippleCross;
+
+              // Tangent tilting in direction of wave propagation
+              var slope = Math.cos(t * 2.6 - cd.dist * CONFIG.frequency) * 0.4;
+              rx = Math.sin(cd.angle) * slope;
+              ry = -Math.cos(cd.angle) * slope;
+
+              // Subtle breathing scale at wave crests
+              scale = 0.85 + (z / (CONFIG.amplitude * 1.35 + 0.1)) * 0.3;
+            }
+
+            // 2. COSMIC VORTEX / SPIRAL GALAXY MODE
+            else if (CONFIG.mode === 'vortex') {
+              var vortexAngle = cd.angle + t * 0.9 + cd.dist * 0.035;
+              var curRadius = cd.dist + Math.sin(t * 1.6 + cd.dist * 0.09) * (14.0 * (cd.dist / maxDist));
+              x = Math.cos(vortexAngle) * curRadius;
+              y = Math.sin(vortexAngle) * curRadius;
+              z = Math.cos(t * 2.2 + cd.dist * 0.08) * (CONFIG.amplitude * 0.85) + Math.sin(cd.angle * 3 + t) * 8;
+
+              rz = vortexAngle;
+              rx = Math.sin(t + cd.dist * 0.05) * 0.6;
+              scale = 0.75 + Math.sin(t * 2 + cd.dist * 0.1) * 0.35;
+            }
+
+            // 3. DNA DOUBLE HELIX MODE
+            else if (CONFIG.mode === 'helix') {
+              var strand = cd.gridI % 2 === 0 ? 0 : Math.PI;
+              var progress = (cd.gridJ - halfGrid) / halfGrid; // -1 to 1
+              var helixAngle = t * 1.8 + progress * Math.PI * 2.5 + strand;
+              var helixRadius = 42.0 + Math.sin(t * 1.5 + progress * 4) * 8.0;
+
+              x = Math.cos(helixAngle) * helixRadius;
+              y = progress * (CONFIG.cubeSpacing * halfGrid * 1.6);
+              z = Math.sin(helixAngle) * helixRadius;
+
+              rx = helixAngle;
+              ry = t * 1.5;
+              scale = 0.9 + Math.sin(helixAngle * 2) * 0.25;
+            }
+
+            // 4. HYPER PULSE / BREATHING MODE
+            else if (CONFIG.mode === 'pulse') {
+              var pulseWave = Math.sin(t * 2.4 - cd.dist * 0.07);
+              var pulseFactor = 1.0 + pulseWave * 0.48;
+              x = cd.baseX * pulseFactor;
+              y = cd.baseY * pulseFactor;
+              z = Math.sin(t * 3.2 + cd.dist * 0.12) * CONFIG.amplitude;
+
+              scale = 0.7 + Math.max(0.0, pulseWave) * 0.65;
+              rx = t * cd.rotSpeedX;
+              ry = t * cd.rotSpeedY;
+            }
+
+            // 5. TORUS KNOT LOOP MODE
+            else if (CONFIG.mode === 'torus') {
+              var u = (cd.index / numCubes) * Math.PI * 2 + t * 0.7;
+              var p = 2, q = 3;
+              var rKnot = 48 + 20 * Math.cos(q * u);
+              x = rKnot * Math.cos(p * u);
+              y = rKnot * Math.sin(p * u);
+              z = 26 * Math.sin(q * u);
+
+              rx = u * 3;
+              ry = u * 2;
+              scale = 0.85 + Math.sin(u * 6) * 0.3;
+            }
+
+            // 6. SUPERNOVA BURST & REBOUND MODE
+            else if (CONFIG.mode === 'supernova') {
+              var cycle = (t * 0.7) % (Math.PI * 2);
+              var explode = Math.sin(cycle);
+              var expDist = Math.max(0, explode) * 95;
+              x = cd.baseX * 0.5 + cd.burstDir[0] * expDist;
+              y = cd.baseY * 0.5 + cd.burstDir[1] * expDist;
+              z = cd.burstDir[2] * expDist;
+
+              rx = t * 3 * cd.burstDir[0];
+              ry = t * 3 * cd.burstDir[1];
+              rz = t * 3 * cd.burstDir[2];
+              scale = 0.5 + Math.max(0, Math.sin(cycle)) * 0.7;
+            }
+
+            // Local cube axial tumble if enabled
+            if (CONFIG.spinCubes) {
+              cd.rotX += cd.rotSpeedX * 0.02 * CONFIG.speed;
+              cd.rotY += cd.rotSpeedY * 0.02 * CONFIG.speed;
+              cd.rotZ += cd.rotSpeedZ * 0.02 * CONFIG.speed;
+              rx += cd.rotX;
+              ry += cd.rotY;
+              rz += cd.rotZ;
+            }
+
+            // Shockwave perturbation injection
+            var shockOffset = 0;
+            if (state.shockwaveIntensity > 0) {
+              var swDist = cd.dist;
+              var waveFront = state.shockwaveAge * 85;
+              var diff = Math.abs(swDist - waveFront);
+              if (diff < 35) {
+                var waveShape = Math.cos((diff / 35) * (Math.PI / 2));
+                shockOffset = waveShape * state.shockwaveIntensity * 60;
+                z += shockOffset;
+                scale *= 1.0 + (waveShape * state.shockwaveIntensity * 0.6);
+                rx += waveShape * 1.5;
+                ry += waveShape * 1.5;
+              }
+            }
+
+            // Update 3D hardware matrix
+            updateCubeTransform(c, x, y, z, rx, ry, rz, scale, scale, scale);
+
+            // Compute dynamic color mapping
+            var colorOffset = CONFIG.colorWave ? t * 0.12 : 0;
+            var distFactor = (cd.dist / (maxDist + 0.1)) + (z / (CONFIG.amplitude * 2 + 0.1)) * 0.35;
+            var baseColor = getThemeColor(CONFIG.theme, distFactor, colorOffset);
+
+            // Flash neon white if caught in shockwave
+            if (shockOffset > 5) {
+              var flash = Math.min(1.0, shockOffset / 40);
+              baseColor = [
+                baseColor[0] * (1 - flash) + 1.0 * flash,
+                baseColor[1] * (1 - flash) + 1.0 * flash,
+                baseColor[2] * (1 - flash) + 1.0 * flash
+              ];
+            }
+
+            c.color = baseColor;
+          }
+
+          // B) ANIMATE FLYING ORBITING SATELLITES
+          var numFlying = flyingCubes.length;
+          for (var f = 0; f < numFlying; f++) {
+            var fc = flyingCubes[f];
+            var fcd = fc.customData;
+
+            var orbitAngle = t * fcd.orbitSpeed + fcd.orbitPhase;
+            var curOrbRadius = fcd.radius + Math.sin(t * 1.4 + fcd.orbitPhase) * 16.0;
+
+            var rawX = Math.cos(orbitAngle) * curOrbRadius;
+            var rawY = Math.sin(t * fcd.verticalFreq + fcd.orbitPhase) * fcd.verticalAmp;
+            var rawZ = Math.sin(orbitAngle) * curOrbRadius;
+
+            // Apply 3D orbital tilt matrix
+            var cosTx = Math.cos(fcd.orbitTiltX), sinTx = Math.sin(fcd.orbitTiltX);
+            var cosTz = Math.cos(fcd.orbitTiltZ), sinTz = Math.sin(fcd.orbitTiltZ);
+
+            var y1 = rawY * cosTx - rawZ * sinTx;
+            var z1 = rawY * sinTx + rawZ * cosTx;
+            var x2 = rawX * cosTz - y1 * sinTz;
+            var y2 = rawX * sinTz + y1 * cosTz;
+
+            // Axial tumble
+            fcd.rotX += fcd.rotSpeedX * 0.03 * CONFIG.speed;
+            fcd.rotY += fcd.rotSpeedY * 0.03 * CONFIG.speed;
+            fcd.rotZ += fcd.rotSpeedZ * 0.03 * CONFIG.speed;
+
+            var fScale = 1.0 + Math.sin(t * 3.0 + fcd.orbitPhase) * 0.3;
+            updateCubeTransform(fc, x2, y2, z1, fcd.rotX, fcd.rotY, fcd.rotZ, fScale, fScale, fScale);
+
+            var flyHueOffset = (f / numFlying) + (CONFIG.colorWave ? t * 0.2 : 0);
+            fc.color = getThemeColor(CONFIG.theme, flyHueOffset, 0.45);
+          }
+
+          // C) ANIMATE CENTRAL POWER CORE
+          var corePulse = 1.0 + Math.sin(t * 4.0) * 0.35 + state.shockwaveIntensity * 0.8;
+          var coreRot = t * 1.5;
+          updateCubeTransform(coreCube, 0, 0, 0, coreRot, coreRot * 1.3, coreRot * 0.7, corePulse, corePulse, corePulse);
+          coreCube.color = state.shockwaveIntensity > 0.1
+            ? [1.0, 1.0, 1.0]
+            : getThemeColor(CONFIG.theme, 0.95, t * 0.3);
+
+          // D) AUTO-ORBIT CAMERA
+          if (CONFIG.autoRotate && !state.isDragging) {
+            r.camera.rotate([0.35 * CONFIG.speed, 0]);
+          }
+        };
+
+        // Render initial frame
+        r.render();
+
+        // Update stats HUD with cube counts
+        document.getElementById('stats-count').textContent = matrixCubes.length + flyingCubes.length + 1;
+
+        // ==========================================
+        // 9. SHOCKWAVE TRIGGER FUNCTION
+        // ==========================================
+        function triggerShockwave(screenX, screenY) {
+          state.shockwaveIntensity = 1.0;
+          state.shockwaveAge = 0;
+          createScreenRipple(screenX, screenY);
+        }
+
+        // Visual screen ripple overlay for visceral impact
+        var rippleCanvas = document.getElementById('shockwave-canvas');
+        var rippleCtx = rippleCanvas.getContext('2d');
+        function resizeRippleCanvas() {
+          rippleCanvas.width = window.innerWidth;
+          rippleCanvas.height = window.innerHeight;
+        }
+        resizeRippleCanvas();
+        window.addEventListener('resize', resizeRippleCanvas);
+
+        var ripples = [];
+        function createScreenRipple(x, y) {
+          if (!x || !y) {
+            x = window.innerWidth / 2;
+            y = window.innerHeight / 2;
+          }
+          ripples.push({ x: x, y: y, radius: 10, alpha: 0.9, maxRadius: Math.max(window.innerWidth, window.innerHeight) * 0.65 });
+        }
+
+        function drawRipples() {
+          rippleCtx.clearRect(0, 0, rippleCanvas.width, rippleCanvas.height);
+          for (var i = ripples.length - 1; i >= 0; i--) {
+            var rp = ripples[i];
+            rp.radius += 24 * CONFIG.speed;
+            rp.alpha *= 0.92;
+
+            rippleCtx.save();
+            rippleCtx.beginPath();
+            rippleCtx.arc(rp.x, rp.y, rp.radius, 0, Math.PI * 2);
+            rippleCtx.strokeStyle = 'rgba(0, 240, 255, ' + rp.alpha + ')';
+            rippleCtx.lineWidth = 3.5;
+            rippleCtx.shadowColor = '#00f0ff';
+            rippleCtx.shadowBlur = 16;
+            rippleCtx.stroke();
+            rippleCtx.restore();
+
+            if (rp.alpha < 0.02 || rp.radius > rp.maxRadius) {
+              ripples.splice(i, 1);
+            }
+          }
+          requestAnimationFrame(drawRipples);
+        }
+        drawRipples();
+
+        // ==========================================
+        // 10. UI CONTROLS & EVENT LISTENERS
+        // ==========================================
+        function updateActiveButton(groupSelector, activeBtn) {
+          document.querySelectorAll(groupSelector).forEach(function (b) {
+            b.classList.remove('active');
+          });
+          if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        // Mode Switch Buttons
+        document.querySelectorAll('[data-mode]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            CONFIG.mode = this.getAttribute('data-mode');
+            updateActiveButton('[data-mode]', this);
+            document.getElementById('stats-mode').textContent = CONFIG.mode.toUpperCase();
+          });
+        });
+
+        // Theme Switch Buttons
+        document.querySelectorAll('[data-theme]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            CONFIG.theme = this.getAttribute('data-theme');
+            updateActiveButton('[data-theme]', this);
+          });
+        });
+
+        // Sliders
+        var speedSlider = document.getElementById('speed-slider');
+        speedSlider.addEventListener('input', function () {
+          CONFIG.speed = parseFloat(this.value);
+          document.getElementById('speed-val').textContent = CONFIG.speed.toFixed(1) + 'x';
+        });
+
+        var ampSlider = document.getElementById('amp-slider');
+        ampSlider.addEventListener('input', function () {
+          CONFIG.amplitude = parseFloat(this.value);
+          document.getElementById('amp-val').textContent = Math.round(CONFIG.amplitude);
+        });
+
+        var sizeSlider = document.getElementById('size-slider');
+        sizeSlider.addEventListener('input', function () {
+          CONFIG.cubeSize = parseFloat(this.value);
+          document.getElementById('size-val').textContent = Math.round(CONFIG.cubeSize);
+          for (var k = 0; k < matrixCubes.length; k++) {
+            matrixCubes[k].lengthX = CONFIG.cubeSize;
+            matrixCubes[k].lengthY = CONFIG.cubeSize;
+            matrixCubes[k].lengthZ = CONFIG.cubeSize;
+          }
+        });
+
+        // Checkboxes
+        document.getElementById('autorotate-check').addEventListener('change', function () {
+          CONFIG.autoRotate = this.checked;
+        });
+
+        document.getElementById('spincubes-check').addEventListener('change', function () {
+          CONFIG.spinCubes = this.checked;
+        });
+
+        document.getElementById('colorwave-check').addEventListener('change', function () {
+          CONFIG.colorWave = this.checked;
+        });
+
+        // Action Buttons
+        document.getElementById('btn-burst').addEventListener('click', function () {
+          triggerShockwave();
+        });
+
+        document.getElementById('btn-reset-cam').addEventListener('click', function () {
+          r.resetViewAndRender();
+        });
+
+        document.getElementById('btn-download-scene').addEventListener('click', function () {
+          if (typeof download === 'function') download();
+        });
+
+        document.getElementById('btn-upload-scene').addEventListener('click', function () {
+          document.getElementById('file-loader').click();
+        });
+
+        document.getElementById('file-loader').addEventListener('change', function (e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function (ev) {
+            try {
+              var loaded = JSON.parse(ev.target.result);
+              // Hide existing cubes
+              for (var obj in r.Ha) {
+                r.Ha[obj].visible = false;
+              }
+              // Parse scene
+              for (var idx in loaded['objects']) {
+                var o = loaded['objects'][idx];
+                var type = o[0], color = o[1], matrix = o[2], radius = o[3], lx = o[4], ly = o[5], lz = o[6];
+                if (type === 'cube') {
+                  var lc = new X.cube();
+                  lc.color = color;
+                  lc.transform.matrix = new Float32Array(Object.values(matrix));
+                  lc.lengthX = lx; lc.lengthY = ly; lc.lengthZ = lz;
+                  r.add(lc);
+                }
+              }
+              if (loaded['camera'] && loaded['camera'][0]) {
+                r.camera.view = new Float32Array(Object.values(loaded['camera'][0]));
+              }
+            } catch (err) {
+              alert('Error loading scene file: ' + err.message);
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        document.getElementById('btn-fullscreen').addEventListener('click', function () {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(function () {});
+          } else {
+            document.exitFullscreen().catch(function () {});
+          }
+        });
+
+        var hud = document.getElementById('hud');
+        var hudToggleBtn = document.getElementById('hud-toggle-btn');
+        function toggleHud() {
+          var isHidden = hud.classList.toggle('hidden');
+          hudToggleBtn.style.display = isHidden ? 'block' : 'none';
+        }
+
+        hudToggleBtn.addEventListener('click', toggleHud);
+
+        // ==========================================
+        // 11. MOUSE / DRAG INTERACTION
+        // ==========================================
+        window.addEventListener('mousedown', function (e) {
+          state.mouseDownPos.x = e.clientX;
+          state.mouseDownPos.y = e.clientY;
+          state.isDragging = false;
+        });
+
+        window.addEventListener('mousemove', function (e) {
+          var dx = e.clientX - state.mouseDownPos.x;
+          var dy = e.clientY - state.mouseDownPos.y;
+          if (Math.hypot(dx, dy) > 6) {
+            state.isDragging = true;
+          }
+        });
+
+        window.addEventListener('mouseup', function (e) {
+          if (e.target.closest('#hud') || e.target.closest('#hud-toggle-btn')) return;
+          // If user clicked without dragging, trigger shockwave
+          if (!state.isDragging) {
+            triggerShockwave(e.clientX, e.clientY);
+          }
+          state.isDragging = false;
+        });
+
+        // ==========================================
+        // 12. KEYBOARD CONTROLS
+        // ==========================================
+        var modesList = ['wave', 'vortex', 'helix', 'pulse', 'torus', 'supernova'];
+        var themesList = ['cyberpunk', 'rainbow', 'aurora', 'fire', 'matrix', 'sunset'];
+
+        window.addEventListener('keydown', function (e) {
+          if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            CONFIG.paused = !CONFIG.paused;
+          } else if (e.key === 'h' || e.key === 'H') {
+            toggleHud();
+          } else if (e.key === 'r' || e.key === 'R') {
+            r.resetViewAndRender();
+          } else if (e.key === 'b' || e.key === 'B') {
+            triggerShockwave();
+          } else if (e.key === 'f' || e.key === 'F') {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+            else document.exitFullscreen().catch(function () {});
+          } else if (e.key === 'm' || e.key === 'M') {
+            var nextM = (modesList.indexOf(CONFIG.mode) + 1) % modesList.length;
+            CONFIG.mode = modesList[nextM];
+            var btnM = document.querySelector('[data-mode="' + CONFIG.mode + '"]');
+            if (btnM) updateActiveButton('[data-mode]', btnM);
+            document.getElementById('stats-mode').textContent = CONFIG.mode.toUpperCase();
+          } else if (e.key === 'c' || e.key === 'C') {
+            var nextT = (themesList.indexOf(CONFIG.theme) + 1) % themesList.length;
+            CONFIG.theme = themesList[nextT];
+            var btnT = document.querySelector('[data-theme="' + CONFIG.theme + '"]');
+            if (btnT) updateActiveButton('[data-theme]', btnT);
+          }
+        });
+      };
+    </script>
+  </head>
+  <body>
+    <!-- Shockwave Canvas Overlay -->
+    <canvas id="shockwave-canvas"></canvas>
+
+    <!-- Floating Button to Show HUD when hidden -->
+    <button id="hud-toggle-btn">&darr; Show Controls (H)</button>
+
+    <!-- Glassmorphism Control Panel (HUD) -->
+    <div id="hud">
+      <div class="header-title">
+        <h1>Cube Art Studio</h1>
+        <span class="badge">XTK 3D</span>
+      </div>
+      <div class="subtitle">WebGL Kinetic Sculpture &bull; CS460 Interactive Lab</div>
+
+      <!-- Animation Mode -->
+      <div class="section-label">
+        <span>Animation Mode</span>
+        <span style="color:#00f0ff;">[M]</span>
+      </div>
+      <div class="btn-grid-3">
+        <button class="active" data-mode="wave">Wave</button>
+        <button data-mode="vortex">Vortex</button>
+        <button data-mode="helix">Helix</button>
+        <button data-mode="pulse">Pulse</button>
+        <button data-mode="torus">Torus</button>
+        <button data-mode="supernova">Nova</button>
+      </div>
+
+      <!-- Color Palettes -->
+      <div class="section-label">
+        <span>Color Theme</span>
+        <span style="color:#00f0ff;">[C]</span>
+      </div>
+      <div class="btn-grid-3">
+        <button class="active" data-theme="cyberpunk">Cyber</button>
+        <button data-theme="rainbow">Prism</button>
+        <button data-theme="aurora">Aurora</button>
+        <button data-theme="fire">Solar</button>
+        <button data-theme="matrix">Matrix</button>
+        <button data-theme="sunset">Sunset</button>
+      </div>
+
+      <!-- Dynamics & Sliders -->
+      <div class="section-label">Dynamics &amp; Geometry</div>
+      <div class="control-row">
+        <span>Speed</span>
+        <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="1.0" />
+        <span class="val" id="speed-val">1.0x</span>
+      </div>
+
+      <div class="control-row">
+        <span>Amplitude</span>
+        <input type="range" id="amp-slider" min="5" max="60" step="1" value="28" />
+        <span class="val" id="amp-val">28</span>
+      </div>
+
+      <div class="control-row">
+        <span>Cube Size</span>
+        <input type="range" id="size-slider" min="5" max="18" step="0.5" value="9.5" />
+        <span class="val" id="size-val">10</span>
+      </div>
+
+      <!-- Toggles -->
+      <div class="section-label">Toggles</div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="autorotate-check" checked />
+        <span>Auto-Orbit Camera</span>
+      </label>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="spincubes-check" checked />
+        <span>Local Cube Tumble / Spin</span>
+      </label>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="colorwave-check" checked />
+        <span>Flowing Color Spectrum</span>
+      </label>
+
+      <!-- Actions -->
+      <div class="section-label">Actions</div>
+      <div class="btn-grid">
+        <button id="btn-burst" class="btn-burst">&starf; Shockwave [B]</button>
+        <button id="btn-reset-cam" class="btn-action">&circlearrowleft; Reset Cam [R]</button>
+      </div>
+      <div class="btn-grid">
+        <button id="btn-download-scene" class="btn-action">&darr; Export JSON</button>
+        <button id="btn-upload-scene" class="btn-action">&uarr; Import JSON</button>
+      </div>
+      <button id="btn-fullscreen" style="width: 100%; margin-top: 4px;" class="btn-action">&#x26F6; Toggle Fullscreen [F]</button>
+
+      <!-- Keyboard Tips -->
+      <div class="keyboard-tips">
+        <kbd>Space</kbd> Pause/Play &nbsp;&bull;&nbsp;
+        <kbd>Click</kbd> Shockwave<br />
+        <kbd>M</kbd> Mode &nbsp;&bull;&nbsp;
+        <kbd>C</kbd> Theme &nbsp;&bull;&nbsp;
+        <kbd>H</kbd> Hide/Show HUD
+      </div>
+    </div>
+
+    <!-- Telemetry HUD -->
+    <div id="telemetry">
+      <div class="telemetry-item">
+        <div class="dot"></div>
+        <span><span id="stats-fps">60</span> FPS</span>
+      </div>
+      <div class="telemetry-item">
+        <span><span id="stats-count">106</span> CUBES</span>
+      </div>
+      <div class="telemetry-item" style="color: #00f0ff;">
+        <span id="stats-mode">WAVE</span>
+      </div>
+    </div>
+
+    <input type="file" id="file-loader" accept=".json" />
+  </body>
+</html>
