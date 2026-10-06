@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Floating Cube Islands</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(#79c8ff, #dff4ff);
+      font-family: Arial, sans-serif;
+    }
+
+    #info {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.58);
+      color: white;
+      max-width: 310px;
+    }
+
+    #info h2 {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+    }
+
+    #info p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      z-index: 10;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.50);
+      color: white;
+      font-size: 12px;
+    }
+  </style>
+
+  <script
+    type="text/javascript"
+    src="https://get.goXTK.com/xtk_edge.js">
+  </script>
+
+  <script type="text/javascript">
+
+    window.onload = function() {
+
+      // Create the XTK 3D renderer.
+      var r = new X.renderer3D();
+      r.init();
+
+      // Move the camera back so the whole floating island can be seen.
+      r.camera.position = [0, 25, 180];
+      r.camera.focus = [10, 8, 0];
+
+
+      // --------------------------------------------------
+      // HELPER FUNCTION FOR CREATING CUBES
+      // --------------------------------------------------
+
+      function createCube(x, y, z, sizeX, sizeY, sizeZ, color) {
+
+        var cube = new X.cube();
+
+        cube.center = [x, y, z];
+
+        cube.lengthX = sizeX;
+        cube.lengthY = sizeY;
+        cube.lengthZ = sizeZ;
+
+        cube.color = color;
+
+        r.add(cube);
+
+        return cube;
+      }
+
+
+      // --------------------------------------------------
+      // GRASS / DIRT BLOCK
+      // --------------------------------------------------
+
+      function createGrassBlock(x, y, z) {
+
+        // Brown dirt section.
+        var dirt = createCube(
+          x,
+          y,
+          z,
+          18,
+          14,
+          18,
+          [0.48, 0.30, 0.14]
+        );
+
+        // Green grass layer on top.
+        var grass = createCube(
+          x,
+          y + 8,
+          z,
+          18,
+          3,
+          18,
+          [0.25, 0.72, 0.28]
+        );
+
+        return {
+          dirt: dirt,
+          grass: grass
+        };
+      }
+
+
+      // --------------------------------------------------
+      // MAIN FLOATING ISLAND
+      // --------------------------------------------------
+
+      createGrassBlock(0, 0, 0);
+
+      createGrassBlock(-18, 0, 0);
+      createGrassBlock(18, 0, 0);
+
+      createGrassBlock(0, 0, -18);
+      createGrassBlock(0, 0, 18);
+
+      createGrassBlock(-18, 0, 18);
+      createGrassBlock(18, 0, -18);
+
+
+      // Dirt blocks underneath the island make it look
+      // like it is floating in the sky.
+
+      createCube(
+        0,
+        -14,
+        0,
+        12,
+        12,
+        12,
+        [0.38, 0.24, 0.12]
+      );
+
+      createCube(
+        -8,
+        -23,
+        3,
+        8,
+        8,
+        8,
+        [0.32, 0.21, 0.11]
+      );
+
+      createCube(
+        7,
+        -22,
+        -5,
+        7,
+        7,
+        7,
+        [0.32, 0.21, 0.11]
+      );
+
+
+      // --------------------------------------------------
+      // TREE
+      // --------------------------------------------------
+
+      // Tree trunk.
+      createCube(
+        -18,
+        18,
+        18,
+        6,
+        25,
+        6,
+        [0.48, 0.29, 0.10]
+      );
+
+      // Leaves.
+      createCube(
+        -18,
+        34,
+        18,
+        20,
+        14,
+        20,
+        [0.18, 0.60, 0.22]
+      );
+
+      createCube(
+        -8,
+        34,
+        18,
+        9,
+        10,
+        10,
+        [0.20, 0.66, 0.24]
+      );
+
+      createCube(
+        -28,
+        34,
+        18,
+        9,
+        10,
+        10,
+        [0.20, 0.66, 0.24]
+      );
+
+      createCube(
+        -18,
+        44,
+        18,
+        10,
+        10,
+        10,
+        [0.20, 0.66, 0.24]
+      );
+
+
+      // --------------------------------------------------
+      // CHEST-LIKE BLOCK
+      // --------------------------------------------------
+
+      createCube(
+        18,
+        13,
+        18,
+        12,
+        9,
+        10,
+        [0.78, 0.48, 0.15]
+      );
+
+      createCube(
+        18,
+        18,
+        18,
+        12,
+        2,
+        10,
+        [0.94, 0.68, 0.24]
+      );
+
+      createCube(
+        18,
+        13,
+        23,
+        2,
+        4,
+        1,
+        [0.90, 0.82, 0.35]
+      );
+
+
+      // --------------------------------------------------
+      // STONE BLOCK
+      // --------------------------------------------------
+
+      createCube(
+        18,
+        14,
+        -18,
+        13,
+        13,
+        13,
+        [0.54, 0.57, 0.60]
+      );
+
+
+      // --------------------------------------------------
+      // SPECIAL CENTER CHECKPOINT BLOCK
+      // --------------------------------------------------
+
+      var specialBlock = createCube(
+        0,
+        17,
+        0,
+        12,
+        12,
+        12,
+        [0.30, 0.85, 1.00]
+      );
+
+
+      // --------------------------------------------------
+      // PLAYER CUBE
+      // --------------------------------------------------
+
+      createCube(
+        0,
+        16,
+        -18,
+        8,
+        12,
+        8,
+        [0.96, 0.76, 0.20]
+      );
+
+
+      // --------------------------------------------------
+      // FLOATING PLATFORM PATH
+      // --------------------------------------------------
+
+      var movingPlatform1 = createGrassBlock(
+        48,
+        14,
+        -8
+      );
+
+      var movingPlatform2 = createGrassBlock(
+        75,
+        27,
+        5
+      );
+
+      createGrassBlock(
+        103,
+        41,
+        -12
+      );
+
+
+      // --------------------------------------------------
+      // CLOUDS
+      // --------------------------------------------------
+
+      // Left cloud.
+      createCube(
+        -70,
+        62,
+        -55,
+        28,
+        8,
+        12,
+        [1, 1, 1]
+      );
+
+      createCube(
+        -55,
+        65,
+        -55,
+        16,
+        9,
+        11,
+        [1, 1, 1]
+      );
+
+
+      // Right cloud.
+      createCube(
+        70,
+        70,
+        -62,
+        26,
+        8,
+        12,
+        [1, 1, 1]
+      );
+
+      createCube(
+        84,
+        73,
+        -62,
+        16,
+        9,
+        11,
+        [1, 1, 1]
+      );
+
+
+      // --------------------------------------------------
+      // ANIMATION
+      // --------------------------------------------------
+
+      var time = 0;
+
+      var platform1LastY = 0;
+      var platform2LastY = 0;
+
+
+      setInterval(function() {
+
+        time += 0.10;
+
+
+        // Change the color of the special checkpoint block.
+        var glow = (Math.sin(time) + 1) / 2;
+
+        specialBlock.color = [
+          0.25 + glow * 0.35,
+          0.72 + glow * 0.20,
+          1.00
+        ];
+
+
+        // Slowly move the first floating platform.
+        var platform1Y =
+          Math.sin(time * 0.70) * 3;
+
+        var platform1Difference =
+          platform1Y - platform1LastY;
+
+        movingPlatform1.dirt.transform.translateY(
+          platform1Difference
+        );
+
+        movingPlatform1.grass.transform.translateY(
+          platform1Difference
+        );
+
+        platform1LastY = platform1Y;
+
+
+        // Slowly move the second floating platform.
+        var platform2Y =
+          Math.sin(time * 0.60 + 2) * 4;
+
+        var platform2Difference =
+          platform2Y - platform2LastY;
+
+        movingPlatform2.dirt.transform.translateY(
+          platform2Difference
+        );
+
+        movingPlatform2.grass.transform.translateY(
+          platform2Difference
+        );
+
+        platform2LastY = platform2Y;
+
+
+        // Render the updated scene.
+        r.render();
+
+      }, 80);
+
+
+      // Render the first frame.
+      r.render();
+    };
+
+  </script>
+
+</head>
+
+<body>
+
+  <div id="info">
+
+    <h2>Floating Cube Islands</h2>
+
+    <p>
+      A 3D cube-art scene based on my paper design.
+      A player cube travels across floating island blocks
+      in the sky, while some platforms move and a special
+      checkpoint block changes color.
+    </p>
+
+  </div>
+
+
+  <div id="controls">
+
+    Drag the mouse to rotate the scene.
+    <br>
+    Use the mouse wheel to zoom.
+
+  </div>
+
+</body>
+</html>
