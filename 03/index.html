@@ -30,10 +30,63 @@
 
     var renderer, controls, scene, camera;
 
+
+    var LASTOBJECT = null;
+    var SCALING = false;
+    var TORUSES = [];
+    var FLICKERING = false;
+
+    var WIREFRAME = false;
+
+
+    var COLORS = [
+      0xff69b4, // hotpink
+      0x7CFC00, // grassgreen
+      0x00ffff, // cyan
+      0xffa500, // orange
+      0x9b59ff, // purple
+      0xffff00  // yellow
+    ];
+    var COLORINDEX = 0;
+
+    /******Set clouds******/
+  //   function createCloud(x, y, z) {
+  //   var cloud = new THREE.Group();
+  //   var cloudMaterial =
+  //     new THREE.MeshStandardMaterial({
+  //       color: 0xffffff
+  //     });
+  //   var left = new THREE.Mesh(
+  //     new THREE.SphereGeometry(6, 16, 16),
+  //     cloudMaterial
+  //   );
+  //   var middle = new THREE.Mesh(
+  //     new THREE.SphereGeometry(8, 16, 16),
+  //     cloudMaterial
+  //   );
+  //   var right = new THREE.Mesh(
+  //     new THREE.SphereGeometry(6, 16, 16),
+  //     cloudMaterial
+  //   );
+  //   left.position.set(-6, 0, 0);
+  //   middle.position.set(0, 2, 0);
+  //   right.position.set(6, 0, 0);
+  //   cloud.add(left);
+  //   cloud.add(middle);
+  //   cloud.add(right);
+  //   cloud.position.set(x, y, z);
+  //   scene.add(cloud);
+  // }
+    /******Clouds set******/
+
     window.onload = function () {
 
       // Three.js code goes here
       scene = new THREE.Scene();
+
+      /*skies*/
+      scene.background = new THREE.Color(0x87CEEB);
+      /*skies*/
 
       // setup the camera
       var fov = 75;
@@ -48,34 +101,131 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
+      /*Now on mouse*/
+      renderer.domElement.onmousedown = function (e) {
 
+        // Only place a torus when SHIFT + left mouse button is used
+        if (e.shiftKey && e.button === 0) {
 
-      renderer.domElement.onclick = function (e) {
+          // Turn off OrbitControls while placing the torus
+          controls.enabled = false;
+          var pixel_coords = new THREE.Vector2(
+            e.clientX,
+            e.clientY
+          );
+          var vp_coords = new THREE.Vector2(
+            (pixel_coords.x / window.innerWidth) * 2 - 1,
+            -(pixel_coords.y / window.innerHeight) * 2 + 1
+          );
+          var vp_coords_near = new THREE.Vector3(
+            vp_coords.x,
+            vp_coords.y,
+            0
+          );
+          var raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera(
+            vp_coords_near,
+            camera
+          );
+          var intersects =
+            raycaster.intersectObject(invisible_plane);
+          if (intersects.length > 0) {
+            // Create a NEW torus
+            var geometry =
+              new THREE.TorusKnotGeometry(
+                10,
+                3,
+                100,
+                16
+              );
+            var material =
+              new THREE.MeshStandardMaterial({
+                color: 0xff69b4
+              });
+            var newTorus =
+              new THREE.Mesh(
+                geometry,
+                material
+              );
 
-        console.log('Yay! We clicked!');
+            // Put it where the mouse clicked
+            newTorus.position.set(
+              intersects[0].point.x,
+              intersects[0].point.y,
+              intersects[0].point.z
+            );
+            scene.add(newTorus);
+            TORUSES.push(newTorus); // flicker effect?
+            LASTOBJECT = newTorus;
+            SCALING = true;
+          }
+        }
+      };
 
-        var pixel_coords = new THREE.Vector2(e.clientX, e.clientY);
+      renderer.domElement.onmousemove = function (e) {
+      if (SCALING && LASTOBJECT != null) {
+        var DELTA = -e.movementY * 0.01;
+        // Remember the scale before changing it
+        var oldScale = LASTOBJECT.scale.x;
+        var newScale =
+          LASTOBJECT.scale.x + DELTA;
+        LASTOBJECT.scale.set(
+          newScale,
+          newScale,
+          newScale
+        );
 
-        console.log('Pixel coords', pixel_coords);
+        // If the scale crosses zero from positive to negative,
+        // change from pink to grass green
+        if (oldScale > 0 && newScale <= 0) {
+          LASTOBJECT.material.color.set(0x7CFC00);
+        }
 
-        var vp_coords = new THREE.Vector2(
-          (pixel_coords.x / window.innerWidth) * 2 - 1,  //X
-          -(pixel_coords.y / window.innerHeight) * 2 + 1) // Y
+        // If it crosses zero again from negative to positive,
+        // change back to hot pink
+        else if (oldScale < 0 && newScale >= 0) {
+          LASTOBJECT.material.color.set(0xff69b4);
+        }
+      }
+    };
 
-        console.log('Viewport coords', vp_coords);
+      window.onmouseup = function (e) {
+        SCALING = false;
+        // Turn OrbitControls back on
+        controls.enabled = true;
+      };
 
-        var vp_coords_near = new THREE.Vector3(vp_coords.x, vp_coords.y, 0);
+      window.onkeypress = function (e) {
+        if (e.key === 'f' || e.key === 'F') {
+          FLICKERING = !FLICKERING;
 
-
-        var raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(vp_coords_near, camera);
-        var intersects = raycaster.intersectObject(invisible_plane);
-
-        console.log('Ray to Invisible Plane', intersects[0].point);
-
-        // update torus position
-        torus.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z);
-
+          // When flickering is turned off,
+          // return every torus to full opacity
+          if (!FLICKERING) {
+            for (var i = 0; i < TORUSES.length; i++) {
+              TORUSES[i].material.opacity = 1.0;
+              TORUSES[i].material.transparent = true;
+              TORUSES[i].material.needsUpdate = true;
+            }
+          }
+        }
+        // Toggle wireframe with W
+        if (e.key === 'w' || e.key === 'W') {
+          WIREFRAME = !WIREFRAME;
+          for (var i = 0; i < TORUSES.length; i++) {
+            TORUSES[i].material.wireframe = WIREFRAME;
+            TORUSES[i].material.needsUpdate = true;
+          }
+        }
+        if (e.key === 'c' || e.key === 'C') {
+          COLORINDEX =
+          (COLORINDEX + 1) % COLORS.length;
+          if (LASTOBJECT != null) {
+            LASTOBJECT.material.color.set(
+              COLORS[COLORINDEX]
+            );
+          }
+        }
       };
 
 
@@ -86,6 +236,13 @@
       var light = new THREE.DirectionalLight(0xffffff, 5.0);
       light.position.set(10, 100, 10);
       scene.add(light);
+
+      // /*clouds*/
+      // createCloud(-45, 28, -40);
+      // createCloud(35, 35, -55);
+      // createCloud(55, -25, -50);
+      // createCloud(-55, -30, -60);
+      // /*clouds*/
 
       // configure torus
       var geometry = new THREE.TorusKnotGeometry(
@@ -105,7 +262,7 @@
       );
 
       scene.add(torus);
-
+      TORUSES.push(torus);
 
 
       //
@@ -136,6 +293,20 @@
     function animate() {
 
       requestAnimationFrame(animate);
+
+
+        if (FLICKERING) {
+          for (var i = 0; i < TORUSES.length; i++) {
+            TORUSES[i].material.opacity = Math.random();
+            TORUSES[i].material.transparent = true;
+            TORUSES[i].material.needsUpdate = true;
+            if (Math.random() > 0.97) {
+              var randomColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+              TORUSES[i].material.color.set(randomColor);
+            }
+          }
+        }
+
 
       // and here..
       controls.update();
