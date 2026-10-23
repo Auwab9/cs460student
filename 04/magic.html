@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Atari Breakout - Magic Edition (Antigravity WebGL)</title>
+    <style>
+        html,
+        body {
+            background-color: #050508;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden !important;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+
+        #gameboy {
+            background: url("https://cs460.org/assignments/breakout/gameboy_bg.jpg") no-repeat center;
+            width: 1200px;
+            height: 675px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+        }
+
+        #screen_container {
+            width: 600px;
+            height: 360px;
+            position: absolute;
+            top: 53%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background-color: #030308;
+        }
+
+        /* Retro CRT Scanlines & Glass Glow Overlay */
+        .crt_overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.85);
+            z-index: 50;
+        }
+
+        .top_bar {
+            color: #00ff66;
+            font-size: 24px;
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.8);
+            letter-spacing: 1px;
+        }
+
+        #score_name {
+            position: absolute;
+            top: 148px;
+            left: 360px;
+        }
+
+        #score {
+            position: absolute;
+            top: 148px;
+            left: 460px;
+        }
+
+        #high_score_name {
+            position: absolute;
+            top: 148px;
+            left: 560px;
+            color: #ffaa00;
+            text-shadow: 0 0 10px rgba(255, 170, 0, 0.8);
+        }
+
+        #high_score {
+            position: absolute;
+            top: 148px;
+            left: 630px;
+            color: #ffaa00;
+            text-shadow: 0 0 10px rgba(255, 170, 0, 0.8);
+        }
+
+        #lives_name {
+            position: absolute;
+            top: 148px;
+            left: 730px;
+        }
+
+        #lives {
+            position: absolute;
+            top: 148px;
+            left: 825px;
+        }
+
+        /* Combo popup overlay */
+        #combo_display {
+            position: absolute;
+            top: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff00ff;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 12px #ff00ff;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+            z-index: 60;
+        }
+
+        /* Floating Score Canvas */
+        #fx_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        .result {
+            width: 320px;
+            height: 240px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(255, 0, 60, 0.8);
+        }
+
+        #overlay {
+            background-color: rgba(0, 0, 0, 0.75);
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(4px);
+        }
+
+        #victory_message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            font-size: 38px;
+            font-weight: 900;
+            text-shadow: 0 0 20px #00ffff;
+            display: none;
+            text-align: center;
+        }
+
+        #restart_hint {
+            font-size: 16px;
+            color: #ffffff;
+            margin-top: 15px;
+            text-shadow: none;
+        }
+    </style>
+
+    <!-- WebGL Shaders (Pure Plain GLSL) -->
+    <script id="vertexshader" type="glsl">
+      attribute vec3 position;
+      uniform mat4 transform;
+      uniform float point_size;
+
+      void main(void) {
+        vec4 final_position = transform * vec4(position, 1.0);
+        gl_Position = final_position;
+        gl_PointSize = point_size;
+      }
+    </script>
+
+    <script id="fragmentshader" type="glsl">
+      precision mediump float;
+      uniform vec4 color;
+      uniform int is_point;
+
+      void main(void) {
+        if (is_point == 1) {
+            // Anti-aliased circular point particle / glowing ball
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            float dist = length(coord);
+            if (dist > 0.5) {
+                discard;
+            }
+            float alpha = smoothstep(0.5, 0.1, dist);
+            gl_FragColor = vec4(color.rgb, color.a * alpha);
+        } else {
+            gl_FragColor = color;
+        }
+      }
+    </script>
+
+    <script>
+        window.onload = function () {
+            // WebGL Setup
+            c = document.getElementById("c");
+            c.width = 600;
+            c.height = 360;
+            gl = c.getContext("webgl", { alpha: false, antialias: true });
+            gl.viewport(0, 0, c.width, c.height);
+
+            // Enable Alpha Blending for smooth particle sparks & trails
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+            // Floating 2D Score & Spark Canvas
+            fx_c = document.getElementById("fx_canvas");
+            fx_c.width = 600;
+            fx_c.height = 360;
+            fx_ctx = fx_c.getContext("2d");
+
+            // Compile shaders
+            v_shader = gl.createShader(gl.VERTEX_SHADER);
+            f_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+            gl.shaderSource(v_shader, document.getElementById("vertexshader").innerText);
+            gl.compileShader(v_shader);
+
+            gl.shaderSource(f_shader, document.getElementById("fragmentshader").innerText);
+            gl.compileShader(f_shader);
+
+            shaderprogram = gl.createProgram();
+            gl.attachShader(shaderprogram, v_shader);
+            gl.attachShader(shaderprogram, f_shader);
+            gl.linkProgram(shaderprogram);
+            gl.useProgram(shaderprogram);
+
+            // High Score
+            saved_high = localStorage.getItem("breakout_magic_high") || 0;
+            document.getElementById("high_score").innerText = saved_high;
+
+            STOPPED = false;
+            VICTORY = false;
+            COMBO = 0;
+            SHAKE_TIMER = 0;
+
+            // Visual dynamics
+            PADDLE_BASE_SCALE = 1.0;
+            PADDLE_PULSE = 0.0;
+            PADDLE_COLOR_TINT = 0.0;
+
+            // Particle and trail arrays
+            PARTICLES = [];
+            BALL_TRAIL = [];
+            FLOATING_SCORES = [];
+
+            // Dynamic buffer for particles
+            particle_v_buffer = gl.createBuffer();
+            particle_i_buffer = gl.createBuffer();
+
+            OBJECTS = [];
+            OBJECTS.push(createPaddle([1, 1, 1, 1], [0, -0.9, 0])); // 0: PADDLE
+            OBJECTS.push(createBall([1, 1, 1, 1], [0, 0, 0]));       // 1: BALL
+            createBricks();                                          // 2..n: BRICKS
+
+            resetBall();
+            animate();
+        };
+
+        // 8-Bit Retro Chiptune Sound Synthesizer (Web Audio API)
+        var audioCtx = null;
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playSound(type, pitchModifier) {
+            try {
+                var ctx = getAudioContext();
+                var now = ctx.currentTime;
+                pitchModifier = pitchModifier || 1.0;
+
+                if (type === 'paddle') {
+                    // Snappy square blip
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(260 * pitchModifier, now);
+                    osc.frequency.exponentialRampToValueAtTime(420 * pitchModifier, now + 0.09);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+                    osc.start(now);
+                    osc.stop(now + 0.09);
+                } else if (type === 'brick') {
+                    // Chime + Noise burst for satisfying punch
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(480 * pitchModifier, now);
+                    osc.frequency.exponentialRampToValueAtTime(960 * pitchModifier, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'wall') {
+                    // Crisp boundary tap
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, now);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+                    osc.start(now);
+                    osc.stop(now + 0.04);
+                } else if (type === 'lose') {
+                    // Classic descending pitch slide
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(60, now + 0.4);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'gameover') {
+                    // Deep double game over buzzer
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(140, now);
+                    osc.frequency.linearRampToValueAtTime(50, now + 0.7);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+                    osc.start(now);
+                    osc.stop(now + 0.7);
+                } else if (type === 'combo') {
+                    // Ascending combo bell
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'square';
+                    var freq = 400 + Math.min(COMBO, 10) * 80;
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (type === 'win') {
+                    // 5-note triumphant fanfare
+                    [523, 659, 784, 1046, 1318].forEach(function(freq, idx) {
+                        var o = ctx.createOscillator();
+                        var g = ctx.createGain();
+                        o.connect(g);
+                        g.connect(ctx.destination);
+                        o.type = 'triangle';
+                        o.frequency.setValueAtTime(freq, now + idx * 0.1);
+                        g.gain.setValueAtTime(0.18, now + idx * 0.1);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.25);
+                        o.start(now + idx * 0.1);
+                        o.stop(now + idx * 0.1 + 0.25);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function createPaddle(color, offset) {
+            vertices = new Float32Array([
+                -0.1, 0.05, 0.0,
+                -0.1, -0.05, 0.0,
+                0.1, 0.05, 0.0,
+                0.1, -0.05, 0.0
+            ]);
+
+            indices = new Uint8Array([0, 1, 2, 2, 1, 3]);
+
+            v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 6, gl.TRIANGLES];
+        }
+
+        function createBall(color, offset) {
+            vertices = new Float32Array([0.0, 0.0, 0.0]);
+            indices = new Uint8Array([0]);
+
+            v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 1, gl.POINTS];
+        }
+
+        function createBrick(color, offset, score) {
+            vertices = new Float32Array([
+                -0.095, 0.05, 0.0,
+                -0.095, -0.05, 0.0,
+                0.095, 0.05, 0.0,
+                0.095, -0.05, 0.0
+            ]);
+
+            indices = new Uint8Array([0, 1, 2, 2, 1, 3]);
+
+            v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 6, gl.TRIANGLES, score];
+        }
+
+        function createBricks() {
+            var offset_x = -0.8;
+            var offset_y = 0.88;
+            var colors = [
+                [1.0, 0.15, 0.3, 1.0], // Neon Hot Red (6 pts)
+                [1.0, 0.55, 0.0, 1.0], // Amber Orange (5 pts)
+                [1.0, 0.95, 0.1, 1.0], // Arcade Yellow (4 pts)
+                [0.1, 1.0, 0.4, 1.0],  // Electric Lime (3 pts)
+                [0.0, 0.85, 1.0, 1.0], // Cyan Glow (2 pts)
+                [0.75, 0.3, 1.0, 1.0]  // Royal Purple (1 pt)
+            ];
+
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 9; j++) {
+                    OBJECTS.push(createBrick(colors[i], [offset_x, offset_y, 0], 6 - i));
+                    offset_x += 0.2;
+                }
+                offset_x = -0.8;
+                offset_y -= 0.11;
+            }
+        }
+
+        function triggerScreenShake(magnitude) {
+            SHAKE_TIMER = magnitude;
+        }
+
+        // Particle Shatter Spark Generation
+        function spawnBrickParticles(x, y, color) {
+            var count = 18;
+            for (var p = 0; p < count; p++) {
+                var angle = Math.random() * Math.PI * 2;
+                var speed = 0.008 + Math.random() * 0.022;
+                PARTICLES.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed + 0.004,
+                    color: [color[0], color[1], color[2]],
+                    alpha: 1.0,
+                    size: 4.0 + Math.random() * 6.0
+                });
+            }
+        }
+
+        function spawnFloatingScore(x, y, text, colorHex) {
+            // Convert NDC coordinates (-1..1) to screen pixels (0..600, 0..360)
+            var px = ((x + 1) / 2) * 600;
+            var py = ((1 - y) / 2) * 360;
+            FLOATING_SCORES.push({
+                x: px,
+                y: py,
+                text: text,
+                color: colorHex,
+                alpha: 1.0,
+                vy: -1.2
+            });
+        }
+
+        function updateParticlesAndTrails() {
+            // Update Ball Trail
+            if (OBJECTS[1]) {
+                BALL_TRAIL.unshift({
+                    x: OBJECTS[1][3][0],
+                    y: OBJECTS[1][3][1],
+                    alpha: 0.85
+                });
+                if (BALL_TRAIL.length > 9) {
+                    BALL_TRAIL.pop();
+                }
+                for (var t = 0; t < BALL_TRAIL.length; t++) {
+                    BALL_TRAIL[t].alpha *= 0.78;
+                }
+            }
+
+            // Update Brick Particles
+            for (var p = PARTICLES.length - 1; p >= 0; p--) {
+                var pt = PARTICLES[p];
+                pt.x += pt.vx;
+                pt.y += pt.vy;
+                pt.vy -= 0.0006; // Gravity
+                pt.alpha -= 0.035;
+                if (pt.alpha <= 0) {
+                    PARTICLES.splice(p, 1);
+                }
+            }
+        }
+
+        function renderFloatingScores() {
+            fx_ctx.clearRect(0, 0, 600, 360);
+            for (var s = FLOATING_SCORES.length - 1; s >= 0; s--) {
+                var item = FLOATING_SCORES[s];
+                item.y += item.vy;
+                item.alpha -= 0.025;
+                if (item.alpha <= 0) {
+                    FLOATING_SCORES.splice(s, 1);
+                    continue;
+                }
+                fx_ctx.font = "bold 16px 'Courier New', monospace";
+                fx_ctx.fillStyle = item.color;
+                fx_ctx.globalAlpha = item.alpha;
+                fx_ctx.shadowColor = item.color;
+                fx_ctx.shadowBlur = 8;
+                fx_ctx.fillText(item.text, item.x - 12, item.y);
+                fx_ctx.shadowBlur = 0;
+            }
+            fx_ctx.globalAlpha = 1.0;
+        }
+
+        function animate() {
+            if (STOPPED) {
+                return;
+            }
+
+            requestAnimationFrame(animate);
+
+            // Screen Shake Decay
+            var container = document.getElementById("screen_container");
+            if (SHAKE_TIMER > 0) {
+                var shakeX = (Math.random() - 0.5) * SHAKE_TIMER;
+                var shakeY = (Math.random() - 0.5) * SHAKE_TIMER;
+                container.style.transform = `translate(calc(-50% + ${shakeX}px), calc(-50% + ${shakeY}px))`;
+                SHAKE_TIMER -= 1.0;
+            } else {
+                container.style.transform = "translate(-50%, -50%)";
+            }
+
+            // Clear Screen
+            gl.clearColor(0.015, 0.015, 0.03, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            updateBall();
+            updateParticlesAndTrails();
+            renderFloatingScores();
+
+            // WebGL Attribute & Uniform locations
+            var a_position = gl.getAttribLocation(shaderprogram, "position");
+            var u_color = gl.getUniformLocation(shaderprogram, "color");
+            var u_transform = gl.getUniformLocation(shaderprogram, "transform");
+            var u_point_size = gl.getUniformLocation(shaderprogram, "point_size");
+            var u_is_point = gl.getUniformLocation(shaderprogram, "is_point");
+
+            gl.enableVertexAttribArray(a_position);
+
+            // 1. RENDER BALL MOTION TRAILS (Pure WebGL Points)
+            gl.uniform1i(u_is_point, 1);
+            for (var t = 0; t < BALL_TRAIL.length; t++) {
+                var trail = BALL_TRAIL[t];
+                var trail_transform = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    trail.x, trail.y, 0, 1
+                ]);
+                gl.uniformMatrix4fv(u_transform, false, trail_transform);
+                gl.uniform4fv(u_color, new Float32Array([0.0, 0.9, 1.0, trail.alpha * 0.4]));
+                gl.uniform1f(u_point_size, Math.max(3.0, 9.0 * (1.0 - t / BALL_TRAIL.length)));
+
+                // Bind single point buffer
+                gl.bindBuffer(gl.ARRAY_BUFFER, OBJECTS[1][0]);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, OBJECTS[1][1]);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.drawElements(gl.POINTS, 1, gl.UNSIGNED_BYTE, 0);
+            }
+
+            // 2. RENDER SHATTER PARTICLES (Pure WebGL Points)
+            for (var p = 0; p < PARTICLES.length; p++) {
+                var pt = PARTICLES[p];
+                var pt_transform = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    pt.x, pt.y, 0, 1
+                ]);
+                gl.uniformMatrix4fv(u_transform, false, pt_transform);
+                gl.uniform4fv(u_color, new Float32Array([pt.color[0], pt.color[1], pt.color[2], pt.alpha]));
+                gl.uniform1f(u_point_size, pt.size);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, OBJECTS[1][0]);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, OBJECTS[1][1]);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.drawElements(gl.POINTS, 1, gl.UNSIGNED_BYTE, 0);
+            }
+
+            // 3. RENDER CORE OBJECTS (Paddle, Ball, Bricks)
+            if (PADDLE_PULSE > 0) {
+                PADDLE_PULSE *= 0.88;
+                if (PADDLE_PULSE < 0.005) {
+                    PADDLE_PULSE = 0;
+                }
+            }
+            if (PADDLE_COLOR_TINT > 0) {
+                PADDLE_COLOR_TINT *= 0.85;
+            }
+
+            PADDLE_SCALE = PADDLE_BASE_SCALE + PADDLE_PULSE;
+
+            for (var o = 0; o < OBJECTS.length; o++) {
+                var current = OBJECTS[o];
+                var v_buffer = current[0];
+                var i_buffer = current[1];
+                var COLOR = current[2].slice();
+                var OFFSET = current[3];
+                var VERTEXCOUNT = current[4];
+                var PRIMITIVE = current[5];
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+
+                var scale_x = (o === 0) ? PADDLE_SCALE : 1.0;
+                var current_transform = new Float32Array([
+                    scale_x, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    OFFSET[0], OFFSET[1], 0, 1
+                ]);
+
+                gl.uniformMatrix4fv(u_transform, false, current_transform);
+
+                if (o === 0) {
+                    // Paddle impact flash glow
+                    gl.uniform1i(u_is_point, 0);
+                    var r = 1.0;
+                    var g = 1.0 - PADDLE_COLOR_TINT * 0.4;
+                    var b = 1.0 - PADDLE_COLOR_TINT * 0.4;
+                    gl.uniform4fv(u_color, new Float32Array([r, g, b, 1.0]));
+                } else if (o === 1) {
+                    // Ball
+                    gl.uniform1i(u_is_point, 1);
+                    gl.uniform1f(u_point_size, 10.0);
+                    gl.uniform4fv(u_color, new Float32Array([1.0, 1.0, 1.0, 1.0]));
+                } else {
+                    // Bricks
+                    gl.uniform1i(u_is_point, 0);
+                    gl.uniform4fv(u_color, new Float32Array(COLOR));
+                }
+
+                gl.drawElements(PRIMITIVE, VERTEXCOUNT, gl.UNSIGNED_BYTE, 0);
+            }
+        }
+
+        function resetBall() {
+            OBJECTS[0][3][0] = 0;
+            OBJECTS[1][3][0] = 0;
+            OBJECTS[1][3][1] = 0;
+
+            BALLDIRECTION = -Math.PI / 2;
+            SERVE_COUNTDOWN = 35;
+            KEY_LOCKED = true;
+
+            BALL_SPEED = 0.022;
+            PADDLE_BASE_SCALE = 1.0;
+            PADDLE_PULSE = 0.0;
+            PADDLE_SCALE = 1.0;
+            COMBO = 0;
+            updateComboUI();
+        }
+
+        function updateComboUI() {
+            var el = document.getElementById("combo_display");
+            if (COMBO >= 2) {
+                el.innerText = `COMBO x${COMBO}!`;
+                el.style.opacity = "1";
+                el.style.transform = "translateX(-50%) scale(1.15)";
+            } else {
+                el.style.opacity = "0";
+                el.style.transform = "translateX(-50%) scale(1.0)";
+            }
+        }
+
+        function score(score_value, brickX, brickY, brickColor) {
+            COMBO++;
+            updateComboUI();
+
+            var multiplier = Math.min(COMBO, 5);
+            var earned = score_value * multiplier;
+
+            var old_score = parseInt(document.getElementById("score").innerText);
+            var new_score = old_score + earned;
+            document.getElementById("score").innerText = new_score;
+
+            // Check and update High Score
+            if (new_score > saved_high) {
+                saved_high = new_score;
+                localStorage.setItem("breakout_magic_high", saved_high);
+                document.getElementById("high_score").innerText = saved_high;
+            }
+
+            // Floating score popup text
+            var bonusText = (multiplier > 1) ? `+${earned} (x${multiplier})` : `+${earned}`;
+            spawnFloatingScore(brickX, brickY, bonusText, "#00ffff");
+
+            // Row-based resizing
+            if (score_value >= 5) {
+                PADDLE_BASE_SCALE = Math.max(0.75, PADDLE_BASE_SCALE - 0.06);
+            } else if (score_value <= 2) {
+                PADDLE_BASE_SCALE = Math.min(1.35, PADDLE_BASE_SCALE + 0.06);
+            }
+
+            // Check if level cleared
+            if (OBJECTS.length == 2) {
+                playSound('win');
+                triggerScreenShake(8);
+                createBricks();
+                COMBO = 0;
+                updateComboUI();
+            }
+        }
+
+        function loseLife() {
+            var old_life = parseInt(document.getElementById("lives").innerText);
+            var new_life = old_life - 1;
+            document.getElementById("lives").innerText = new_life;
+            triggerScreenShake(9);
+
+            if (new_life <= 0) {
+                playSound('gameover');
+                STOPPED = true;
+                document.getElementById("overlay").style.display = "block";
+                document.getElementById("game_over").style.display = "block";
+            } else {
+                playSound('lose');
+            }
+        }
+
+        function updateBall() {
+            if (typeof SERVE_COUNTDOWN !== 'undefined' && SERVE_COUNTDOWN > 0) {
+                SERVE_COUNTDOWN--;
+                if (SERVE_COUNTDOWN === 0) {
+                    KEY_LOCKED = false;
+                }
+                return;
+            }
+
+            BALL_X = OBJECTS[1][3][0];
+            BALL_Y = OBJECTS[1][3][1];
+
+            BOTTOM_PADDLE_X = OBJECTS[0][3][0];
+            BOTTOM_PADDLE_Y = OBJECTS[0][3][1];
+            BOTTOM_PADDLE_WIDTH = 0.2 * PADDLE_SCALE;
+
+            // Boundary Walls
+            if (BALL_X >= 0.95) {
+                BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playSound('wall');
+                triggerScreenShake(2);
+            } else if (BALL_X <= -0.95) {
+                BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playSound('wall');
+                triggerScreenShake(2);
+            } else if (BALL_Y >= 0.96) {
+                BALLDIRECTION = -BALLDIRECTION;
+                playSound('wall');
+                triggerScreenShake(2);
+            } else if (BALL_Y >= 0.2) {
+                // Bricks collision
+                for (let i = 2; i < OBJECTS.length; i++) {
+                    BRICK_OFFSET_X = OBJECTS[i][3][0];
+                    BRICK_OFFSET_Y = OBJECTS[i][3][1];
+                    if (BALL_X > BRICK_OFFSET_X - 0.095 &&
+                        BALL_X < BRICK_OFFSET_X + 0.095 &&
+                        BALL_Y > BRICK_OFFSET_Y - 0.05 &&
+                        BALL_Y < BRICK_OFFSET_Y + 0.05) {
+
+                        BALLDIRECTION = -BALLDIRECTION;
+                        var score_num = OBJECTS[i][6];
+                        var b_color = OBJECTS[i][2];
+
+                        // Particles and feedback
+                        spawnBrickParticles(BRICK_OFFSET_X, BRICK_OFFSET_Y, b_color);
+                        playSound(COMBO >= 2 ? 'combo' : 'brick');
+                        triggerScreenShake(3);
+
+                        score(score_num, BRICK_OFFSET_X, BRICK_OFFSET_Y, b_color);
+                        OBJECTS.splice(i, 1);
+
+                        if (BALL_SPEED < 0.045) {
+                            BALL_SPEED += 0.0006;
+                        }
+                        break;
+                    }
+                }
+            } else if (BALL_Y <= -0.83 && BALL_Y >= -0.95 && Math.sin(BALLDIRECTION) < 0) {
+                // Paddle Collision
+                BOTTOM_PADDLE_LEFT = BOTTOM_PADDLE_X - BOTTOM_PADDLE_WIDTH / 2 - 0.02;
+                BOTTOM_PADDLE_RIGHT = BOTTOM_PADDLE_X + BOTTOM_PADDLE_WIDTH / 2 + 0.02;
+
+                if (BALL_X >= BOTTOM_PADDLE_LEFT && BALL_X <= BOTTOM_PADDLE_RIGHT) {
+                    OBJECTS[1][3][1] = -0.82;
+
+                    var hit_offset = (BALL_X - BOTTOM_PADDLE_X) / (BOTTOM_PADDLE_WIDTH / 2);
+                    hit_offset = Math.max(-1, Math.min(1, hit_offset));
+
+                    if (Math.abs(hit_offset) < 0.05) {
+                        hit_offset = (Math.random() - 0.5) * 0.3;
+                    }
+
+                    BALLDIRECTION = Math.PI / 2 - hit_offset * (Math.PI / 3);
+                    playSound('paddle');
+
+                    // Visual paddle flex & flash
+                    PADDLE_PULSE = 0.16;
+                    PADDLE_COLOR_TINT = 1.0;
+                    triggerScreenShake(3);
+
+                    // Reset combo on paddle contact
+                    COMBO = 0;
+                    updateComboUI();
+
+                    if (BALL_SPEED < 0.045) {
+                        BALL_SPEED += 0.0015;
+                    }
+                }
+            } else if (BALL_Y < -0.98) {
+                loseLife();
+                resetBall();
+                return;
+            }
+
+            // Update Ball Position
+            OBJECTS[1][3][0] += Math.cos(BALLDIRECTION) * BALL_SPEED;
+            OBJECTS[1][3][1] += Math.sin(BALLDIRECTION) * BALL_SPEED;
+        }
+
+        window.onkeydown = function (e) {
+            getAudioContext();
+            if (STOPPED) {
+                window.location.reload();
+            }
+            if (typeof KEY_LOCKED !== 'undefined' && KEY_LOCKED) {
+                return;
+            }
+
+            var max_x = 1.0 - (0.1 * PADDLE_SCALE);
+            if (e.key === "ArrowLeft") {
+                OBJECTS[0][3][0] -= 0.085;
+                if (OBJECTS[0][3][0] < -max_x) {
+                    OBJECTS[0][3][0] = -max_x;
+                }
+            } else if (e.key === "ArrowRight") {
+                OBJECTS[0][3][0] += 0.085;
+                if (OBJECTS[0][3][0] > max_x) {
+                    OBJECTS[0][3][0] = max_x;
+                }
+            }
+        };
+
+        window.onkeyup = function (e) {
+            KEY_LOCKED = false;
+        };
+    </script>
+</head>
+
+<body>
+    <div id="gameboy">
+        <span id="score_name" class="top_bar">SCORE:</span>
+        <span id="score" class="top_bar">0</span>
+
+        <span id="high_score_name" class="top_bar">HIGH:</span>
+        <span id="high_score" class="top_bar">0</span>
+
+        <span id="lives_name" class="top_bar">LIVES:</span>
+        <span id="lives" class="top_bar">3</span>
+
+        <div id="screen_container">
+            <canvas id="c"></canvas>
+            <canvas id="fx_canvas"></canvas>
+            <div class="crt_overlay"></div>
+            <div id="combo_display">COMBO x2!</div>
+        </div>
+
+        <div id="overlay">
+            <img id="game_over" class="result" src="https://cs460.org/assignments/breakout/game_over.jpg" />
+            <div id="victory_message">
+                STAGE CLEAR!
+                <div id="restart_hint">Press Any Key to Continue</div>
+            </div>
+        </div>
+
+        <!-- Audio Tag placeholders for Assignment Specification -->
+        <audio id="snd_paddle" preload="auto"></audio>
+        <audio id="snd_brick" preload="auto"></audio>
+        <audio id="snd_wall" preload="auto"></audio>
+        <audio id="snd_lose" preload="auto"></audio>
+        <audio id="snd_gameover" preload="auto"></audio>
+    </div>
+</body>
+
+</html>

@@ -286,22 +286,26 @@
             return [v_buffer, i_buffer, color, offset, 6, gl.TRIANGLES, score];
         }
 
+        // Bonus Part 4: Brick Mania! (6 rows, 54 bricks total with retro arcade palette)
         function createBricks() {
-            offset_x = -0.8
-            offset_y = 0.9
-            color = [
-                [1, 0, 0, 1],
-                [1, 0.5, 0, 1],
-                [1, 1, 0, 1],
-                [0, 1, 0, 1],
-            ]
-            for (let i = 0; i < 4; i++) {
+            var offset_x = -0.8;
+            var offset_y = 0.88;
+            var color = [
+                [1.0, 0.1, 0.2, 1.0], // Neon Red (6 pts)
+                [1.0, 0.5, 0.0, 1.0], // Bright Orange (5 pts)
+                [1.0, 0.9, 0.0, 1.0], // Arcade Yellow (4 pts)
+                [0.1, 0.9, 0.3, 1.0], // Lime Green (3 pts)
+                [0.0, 0.8, 1.0, 1.0], // Electric Cyan (2 pts)
+                [0.7, 0.3, 1.0, 1.0], // Magenta / Purple (1 pt)
+            ];
+
+            for (let i = 0; i < 6; i++) {
                 for (let j = 0; j < 9; j++) {
-                    OBJECTS.push(createBrick(color[i], [offset_x, offset_y, 0], 4 - i))
-                    offset_x += 0.2
+                    OBJECTS.push(createBrick(color[i], [offset_x, offset_y, 0], 6 - i));
+                    offset_x += 0.2;
                 }
-                offset_x = -0.8
-                offset_y -= 0.14
+                offset_x = -0.8;
+                offset_y -= 0.11;
             }
         }
 
@@ -353,8 +357,20 @@
 
                 var u_transform = gl.getUniformLocation(shaderprogram, "transform");
 
+                // Bonus Part 3: Smooth exponential spring easing for bounce pulse
+                if (typeof PADDLE_PULSE !== 'undefined' && PADDLE_PULSE > 0) {
+                    PADDLE_PULSE *= 0.88;
+                    if (PADDLE_PULSE < 0.005) {
+                        PADDLE_PULSE = 0;
+                    }
+                }
+                var base_s = (typeof PADDLE_BASE_SCALE !== 'undefined') ? PADDLE_BASE_SCALE : 1.0;
+                var pulse_s = (typeof PADDLE_PULSE !== 'undefined') ? PADDLE_PULSE : 0.0;
+                PADDLE_SCALE = base_s + pulse_s;
+
+                var scale_x = (o === 0) ? PADDLE_SCALE : 1.0;
                 current_transform = new Float32Array([
-                    1, 0, 0, 0,
+                    scale_x, 0, 0, 0,
                     0, 1, 0, 0,
                     0, 0, 1, 0,
                     OFFSET[0], OFFSET[1], 0, 1,
@@ -382,23 +398,132 @@
 
             SERVE_COUNTDOWN = 25; // ~0.8s pause to let the player get ready
             KEY_LOCKED = true;    // lock input so held key from previous round doesn't move paddle
+
+            // Bonus Part 2: reset ball speed
+            BALL_SPEED = 0.02;
+
+            // Bonus Part 3: reset paddle scale & pulse
+            PADDLE_BASE_SCALE = 1.0;
+            PADDLE_PULSE = 0.0;
+            PADDLE_SCALE = 1.0;
         }
 
         function score(score_value) {
             var old_score = document.getElementById("score").innerText;
-            document.getElementById("score").innerText = parseInt(old_score) + score_value;
-            if (OBJECTS.length == 2) { //IF ALL BLRICKS DESTROYED CREATE MORE
+            var new_score = parseInt(old_score) + score_value;
+            document.getElementById("score").innerText = new_score;
+
+            // Bonus Part 3: Row-based resizing
+            if (typeof PADDLE_BASE_SCALE === 'undefined') {
+                PADDLE_BASE_SCALE = 1.0;
+            }
+            if (score_value >= 5) {
+                // Top rows (Red/Orange): Shrink paddle for extra danger (down to 0.75x)
+                PADDLE_BASE_SCALE = Math.max(0.75, PADDLE_BASE_SCALE - 0.07);
+            } else if (score_value <= 2) {
+                // Bottom rows (Cyan/Purple): Expand paddle as reward power-up (up to 1.35x)
+                PADDLE_BASE_SCALE = Math.min(1.35, PADDLE_BASE_SCALE + 0.07);
+            }
+
+            if (OBJECTS.length == 2) { //IF ALL BRICKS DESTROYED CREATE MORE
+                playSound('win');
                 createBricks();
             }
+        }
+
+        // Bonus Part 1: Sound Effects (Web Audio API 8-bit synth + audio tags)
+        var audioCtx = null;
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playSound(type) {
+            try {
+                var ctx = getAudioContext();
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                var now = ctx.currentTime;
+
+                if (type === 'paddle') {
+                    // Retro paddle blip
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(260, now);
+                    osc.frequency.exponentialRampToValueAtTime(390, now + 0.08);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'brick') {
+                    // Crisp brick shatter pop
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(520, now);
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.06);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+                    osc.start(now);
+                    osc.stop(now + 0.06);
+                } else if (type === 'wall') {
+                    // Wall bounce click
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(190, now);
+                    gain.gain.setValueAtTime(0.09, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'lose') {
+                    // Descending life lost slide
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(280, now);
+                    osc.frequency.exponentialRampToValueAtTime(70, now + 0.35);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'gameover') {
+                    // Game over buzzer
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(130, now);
+                    osc.frequency.linearRampToValueAtTime(55, now + 0.6);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+                    osc.start(now);
+                    osc.stop(now + 0.6);
+                } else if (type === 'win') {
+                    // Level clear fanfare
+                    [440, 554, 659, 880].forEach(function(freq, idx) {
+                        var o = ctx.createOscillator();
+                        var g = ctx.createGain();
+                        o.connect(g);
+                        g.connect(ctx.destination);
+                        o.type = 'square';
+                        o.frequency.setValueAtTime(freq, now + idx * 0.09);
+                        g.gain.setValueAtTime(0.1, now + idx * 0.09);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.12);
+                        o.start(now + idx * 0.09);
+                        o.stop(now + idx * 0.09 + 0.12);
+                    });
+                }
+            } catch (err) {}
         }
 
         function loseLife() {
             var old_life = document.getElementById("lives").innerText;
             document.getElementById("lives").innerText = parseInt(old_life) - 1;
             if (old_life == 1) {
+                playSound('gameover');
                 STOPPED = true;
                 document.getElementById("overlay").style.display = "block";
                 document.getElementById("game_over").style.display = "block";
+            } else {
+                playSound('lose');
             }
         }
 
@@ -416,17 +541,21 @@
 
             BOTTOM_PADDLE_X = OBJECTS[0][3][0];
             BOTTOM_PADDLE_Y = OBJECTS[0][3][1];
-            BOTTOM_PADDLE_WIDTH = 0.2;
+            // Bonus Part 3: match collision width to scaled paddle size
+            BOTTOM_PADDLE_WIDTH = 0.2 * ((typeof PADDLE_SCALE !== 'undefined') ? PADDLE_SCALE : 1.0);
 
             if (BALL_X >= 0.95) {
                 // RIGHT WALL
                 BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playSound('wall');
             } else if (BALL_X <= -0.95) {
                 // LEFT WALL
                 BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playSound('wall');
             } else if (BALL_Y >= 0.96) {
                 // TOP WALL
                 BALLDIRECTION = - BALLDIRECTION;
+                playSound('wall');
             } else if (BALL_Y >= 0.2) {
                 // TOP BRICKS
                 for (let i = 2; i < OBJECTS.length; i++) {
@@ -440,6 +569,13 @@
                         score_num = OBJECTS[i][6];
                         OBJECTS.splice(i, 1);
                         score(score_num);
+                        playSound('brick');
+
+                        // Bonus Part 2: Speed up slightly on brick hit
+                        if (typeof BALL_SPEED !== 'undefined' && BALL_SPEED < 0.045) {
+                            BALL_SPEED += 0.0005;
+                        }
+                        break;
                     }
                 }
             } else if (BALL_Y <= -0.83 && BALL_Y >= -0.95 && Math.sin(BALLDIRECTION) < 0) {
@@ -462,7 +598,15 @@
 
                     // Steer ball: hitting right side angles right, left side angles left
                     BALLDIRECTION = Math.PI / 2 - hit_offset * (Math.PI / 3);
-                    //UPDATE STEP ON BOUNCE TO INCREASE SPEED
+                    playSound('paddle');
+
+                    // Bonus Part 3: Gentle elastic impact pulse (smooth 15% flex)
+                    PADDLE_PULSE = 0.15;
+
+                    // UPDATE STEP ON BOUNCE TO INCREASE SPEED (Bonus Part 2)
+                    if (typeof BALL_SPEED !== 'undefined' && BALL_SPEED < 0.045) {
+                        BALL_SPEED += 0.0015;
+                    }
                 }
             } else if (BALL_Y < -0.98) {
                 // LOSE LIFE ONLY WHEN BALL HAS FALLEN COMPLETELY PAST THE PADDLE
@@ -472,11 +616,13 @@
             }
 
             // UPDATE BALL POSITION
-            OBJECTS[1][3][0] += Math.cos(BALLDIRECTION) * 0.02;
-            OBJECTS[1][3][1] += Math.sin(BALLDIRECTION) * 0.02;
+            var current_speed = (typeof BALL_SPEED !== 'undefined') ? BALL_SPEED : 0.02;
+            OBJECTS[1][3][0] += Math.cos(BALLDIRECTION) * current_speed;
+            OBJECTS[1][3][1] += Math.sin(BALLDIRECTION) * current_speed;
         }
 
         window.onkeydown = function (e) {
+            getAudioContext(); // unlock browser audio on player interaction
             if (STOPPED) {
                 // restart the game
                 window.location.reload();
@@ -485,15 +631,17 @@
                 return; // ignore held key repeats from previous attempt
             }
             // TODO Part 3
+            var p_scale = (typeof PADDLE_SCALE !== 'undefined') ? PADDLE_SCALE : 1.0;
+            var max_x = 1.0 - (0.1 * p_scale);
             if (e.key === "ArrowLeft") {
                 OBJECTS[0][3][0] -= 0.08;
-                if (OBJECTS[0][3][0] < -0.9) {
-                    OBJECTS[0][3][0] = -0.9;
+                if (OBJECTS[0][3][0] < -max_x) {
+                    OBJECTS[0][3][0] = -max_x;
                 }
             } else if (e.key === "ArrowRight") {
                 OBJECTS[0][3][0] += 0.08;
-                if (OBJECTS[0][3][0] > 0.9) {
-                    OBJECTS[0][3][0] = 0.9;
+                if (OBJECTS[0][3][0] > max_x) {
+                    OBJECTS[0][3][0] = max_x;
                 }
             }
         };
@@ -516,6 +664,12 @@
         </div>
         <canvas id="c"></canvas>
 
+        <!-- Bonus Part 1: Audio Elements -->
+        <audio id="snd_paddle" preload="auto"></audio>
+        <audio id="snd_brick" preload="auto"></audio>
+        <audio id="snd_wall" preload="auto"></audio>
+        <audio id="snd_lose" preload="auto"></audio>
+        <audio id="snd_gameover" preload="auto"></audio>
     </div>
 </body>
 
